@@ -49,3 +49,6 @@ uploads/
 # ---------------------------------------------------------------------------
 *.log
 logs/
+
+# Template file kept local-only (never published to a public repo)
+.env.example

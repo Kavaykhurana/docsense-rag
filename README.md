@@ -125,7 +125,6 @@ retrieval + a grounded, inline-cited answer) against the live database and API.
 ├── database/          # Database bootstrap helper scripts / notes
 ├── Dockerfile         # Multi-stage build for the backend (used by Render)
 ├── render.yaml        # Render blueprint: DB + backend web service + frontend static site
-├── .env.example       # Placeholder environment configuration
 ├── .gitignore
 └── README.md
 ```
@@ -173,7 +172,11 @@ Gemini credentials live only on the server and are never exposed to the frontend
 
 ## Environment variables
 
-Copy `.env.example` to `.env` and fill in real values. **Never commit `.env`.**
+Create a local `.env` file containing the variables in the table below and fill in
+real values. `.env` (and any `.env.example`/template) is **gitignored and never
+committed** — no credentials or fragile data are ever pushed to the public repo. In
+production these are provided via the platform's environment settings (see
+[Deployment](#deployment-render)).
 
 | Variable | Purpose |
 |----------|---------|
