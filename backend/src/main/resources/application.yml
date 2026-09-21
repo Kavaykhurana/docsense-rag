@@ -51,11 +51,48 @@ spring:
               - profile
             redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
 
+  ai:
+    # Model activation toggles. Defaults keep Gemini enabled; the `test` profile
+    # sets these to `none` so unit/integration tests run offline against the
+    # deterministic stub services instead of calling Google.
+    model:
+      chat: ${AI_CHAT_MODEL:google-genai}
+      embedding:
+        text: ${AI_EMBEDDING_MODEL_ENABLED:google-genai}
+    google:
+      genai:
+        # When an api-key is present the client uses the Gemini Developer API
+        # (Google AI Studio). Server-side only — never exposed to the frontend.
+        api-key: ${GEMINI_API_KEY:}
+        chat:
+          # In Spring AI 1.1.x the model lives on the nested options object.
+          # gemini-2.0-flash has been retired from the Developer API; gemini-2.5-flash
+          # is the current stable flash model.
+          options:
+            model: ${GEMINI_CHAT_MODEL:gemini-2.5-flash}
+        embedding:
+          # The embedding connection binds its own api-key (falls back to Vertex
+          # and demands project-id when blank).
+          api-key: ${GEMINI_API_KEY:}
+          text:
+            options:
+              # gemini-embedding-001 is Google's current text embedding model
+              # (text-embedding-004 has been retired from the Developer API). Its
+              # native width is 3072; we project to 768 to match the pgvector
+              # column, so EMBEDDING_DIMENSION stays authoritative.
+              model: ${GEMINI_EMBEDDING_MODEL:gemini-embedding-001}
+              dimensions: ${EMBEDDING_DIMENSION:768}
+
 # ---------------------------------------------------------------------------
 # Application-specific configuration
 # ---------------------------------------------------------------------------
 app:
   frontend-url: ${FRONTEND_URL:http://localhost:5173}
+  ai:
+    # gemini -> real Spring AI Google Gemini beans; stub -> deterministic local
+    # stand-ins. Selection drives which EmbeddingService / ChatCompletionClient
+    # bean is active (see EmbeddingConfig / ChatClientConfig and the Gemini beans).
+    provider: ${AI_PROVIDER:gemini}
   security:
     allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
   documents:

@@ -1,0 +1,22 @@
+# Test profile: run the full pipeline OFFLINE against the deterministic stubs and
+# disable Spring AI's Gemini model auto-configuration so no network/credentials
+# are needed. Real Gemini behaviour is exercised by GeminiLiveVerificationTest,
+# which is gated on the GEMINI_API_KEY env var and uses the default (gemini) profile.
+app:
+  ai:
+    provider: stub
+
+spring:
+  ai:
+    model:
+      chat: none
+      embedding:
+        text: none
+    google:
+      genai:
+        # The embedding *connection* bean is created regardless of the model
+        # toggle; a placeholder key keeps it in Gemini Developer API mode so it
+        # constructs without ever being called (no network in tests).
+        api-key: test-unused-key
+        embedding:
+          api-key: test-unused-key

@@ -8,6 +8,7 @@ import com.docsense.rag.service.DocumentService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * related query retrieves them — while a different user retrieves nothing.
  */
 @SpringBootTest
+@ActiveProfiles("test")
 @Transactional
 class VectorRetrievalTest {
 

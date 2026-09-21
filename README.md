@@ -82,15 +82,23 @@ Upload → Validation → Text Extraction → Text Cleaning → Chunking → Gem
    → Context Construction → Gemini Prompt → Grounded Answer + Citations
 ```
 
-The vector write/read and orchestration layers depend on
-`GoogleGeminiEmbeddingService` / `GoogleGeminiChatService` (via **Spring AI**), which
-require `GEMINI_API_KEY`. Until that key is provided, the storage/retrieval/answer
-paths are exercised with small, clearly-labelled deterministic local stubs
-(`StubEmbeddingService`, `StubChatCompletionClient`) that are registered only via
-`@ConditionalOnMissingBean` and back off automatically the moment the real Gemini
-beans are added. The pgvector schema, cosine search, chunking, ingestion, citation
-assembly, and chat persistence are all real and tested — nothing about the RAG data
-path is mocked away.
+The generative and embedding steps run on real **Google Gemini** via **Spring AI**
+(`GoogleGeminiEmbeddingService` → `gemini-embedding-001` projected to 768 dimensions,
+and `GoogleGeminiChatService` → `gemini-2.5-flash`), selected when
+`app.ai.provider=gemini` (the default). Two small, clearly-labelled deterministic
+stubs (`StubEmbeddingService`, `StubChatCompletionClient`) exist solely so the test
+suite runs offline; they activate only under the `test` profile
+(`app.ai.provider=stub`). Everything else — pgvector schema, cosine search, chunking,
+ingestion, citation assembly, and chat persistence — is the same code in both modes.
+The real Gemini path has been verified end-to-end (embedding write + cosine
+retrieval + a grounded, inline-cited answer) against the live database and API.
+
+> Spring AI ships Google GenAI as two starters — chat
+> (`spring-ai-starter-model-google-genai`) and embeddings
+> (`spring-ai-starter-model-google-genai-embedding`); both are included. In Spring AI
+> 1.1.x the concrete model name is set under the nested `options` object
+> (`spring.ai.google.genai.chat.options.model`,
+> `spring.ai.google.genai.embedding.text.options.model`).
 
 ---
 
@@ -100,7 +108,7 @@ path is mocked away.
 |--------------|------------------------------------------------------------------------|
 | Frontend     | React, Vite, Tailwind CSS (JavaScript), React Router, Axios           |
 | Backend      | Java 21, Spring Boot 3.5, Spring Web, Spring Security, Spring Data JPA / Hibernate, OAuth2 Client |
-| AI           | Google Gemini (chat + embeddings) via Spring AI                        |
+| AI           | Google Gemini (`gemini-2.5-flash` chat + `gemini-embedding-001` @768) via Spring AI |
 | Database     | PostgreSQL + pgvector, Flyway migrations                               |
 | Build        | Maven (backend), npm/Vite (frontend)                                   |
 | Deployment   | Render                                                                 |
@@ -138,7 +146,8 @@ Foreign keys use `ON DELETE CASCADE` so deleting a document removes its chunks/v
 and deleting a user removes their documents and conversations. The `embedding` column
 is a pgvector type with an HNSW cosine-similarity index. Its dimension is controlled by
 the `EMBEDDING_DIMENSION` Flyway placeholder and must match the embedding model
-(`text-embedding-004` → 768, `gemini-embedding-001` → 3072). Assistant messages store
+(the default `gemini-embedding-001` model is projected to 768 dimensions via its
+`dimensions` option so it matches the column). Assistant messages store
 their source citations as JSONB (`V2__add_message_citations.sql`) so reloaded chat
 history re-renders the exact document/page references.
 
@@ -173,7 +182,8 @@ Copy `.env.example` to `.env` and fill in real values. **Never commit `.env`.**
 | `EMBEDDING_DIMENSION` | pgvector column dimensionality (must match embedding model) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth2 client credentials |
 | `GEMINI_API_KEY` | Google Gemini API key (backend only) |
-| `GEMINI_CHAT_MODEL`, `GEMINI_EMBEDDING_MODEL` | Gemini model selection |
+| `GEMINI_CHAT_MODEL`, `GEMINI_EMBEDDING_MODEL` | Gemini model selection (defaults: `gemini-2.5-flash`, `gemini-embedding-001` projected to 768) |
+| `AI_PROVIDER` | `gemini` (default) or `stub`; the offline test profile uses `stub` |
 | `CHUNK_SIZE`, `CHUNK_OVERLAP`, `MAX_FILE_SIZE`, `MAX_FILE_SIZE_BYTES` | Document processing |
 | `RAG_TOP_K` | Number of chunks retrieved for context |
 | `VITE_API_BASE_URL`, `VITE_BACKEND_URL` | Frontend build-time backend URLs (split-origin deploy only; dev uses the Vite proxy) |
@@ -314,10 +324,11 @@ Built incrementally per the project plan:
 
 - **Phase 1 — Setup, database, Google OAuth2:** ✅ complete and verified locally.
 - **Phase 2 — Upload + text extraction (PDF/DOCX/TXT/MD):** ✅ verified with real files.
-- **Phase 3 — Chunking + embeddings + pgvector storage:** ✅ verified (deterministic
-  local embedding stub until `GEMINI_API_KEY` is provided; real vector column + writes tested).
+- **Phase 3 — Chunking + embeddings + pgvector storage:** ✅ verified with **real
+  Gemini embeddings** (`gemini-embedding-001` @768) written to the live vector column.
 - **Phase 4 — Semantic retrieval:** ✅ cosine top-K search verified, incl. user scoping.
-- **Phase 5 — RAG answers + citations:** ✅ orchestration verified behind the chat seam.
+- **Phase 5 — RAG answers + citations:** ✅ verified with **real Gemini**
+  (`gemini-2.5-flash`) producing a grounded, inline-cited answer.
 - **Phase 6 — Chat history + multi-document:** ✅ conversations/messages + citations
   persisted and reloaded; document-scoped search verified.
 - **Phase 7 — Full light-theme UI:** ✅ document management, details/preview, and the
