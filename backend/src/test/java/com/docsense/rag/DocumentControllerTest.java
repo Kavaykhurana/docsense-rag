@@ -93,7 +93,9 @@ class DocumentControllerTest {
                 .andExpect(jsonPath("$.filename").value("arch.pdf"))
                 .andExpect(jsonPath("$.fileType").value("PDF"))
                 .andExpect(jsonPath("$.pageCount").value(2))
-                .andExpect(jsonPath("$.status").value("PROCESSING"));
+                // Upload runs the full ingestion (chunk + embed + store), which now
+                // completes synchronously to COMPLETED with the local embedding stub.
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
 
         mockMvc.perform(get("/api/documents").with(asUser()))
                 .andExpect(status().isOk());

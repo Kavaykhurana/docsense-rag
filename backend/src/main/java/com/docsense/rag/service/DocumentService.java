@@ -3,12 +3,14 @@ package com.docsense.rag.service;
 import com.docsense.rag.document.ExtractionResult;
 import com.docsense.rag.document.TextExtractionService;
 import com.docsense.rag.dto.DocumentDto;
+import com.docsense.rag.dto.DocumentPreviewDto;
 import com.docsense.rag.entity.Document;
 import com.docsense.rag.entity.DocumentStatus;
 import com.docsense.rag.entity.FileType;
 import com.docsense.rag.exception.BadRequestException;
 import com.docsense.rag.exception.ResourceNotFoundException;
 import com.docsense.rag.mapper.DocumentMapper;
+import com.docsense.rag.repository.DocumentChunkRepository;
 import com.docsense.rag.repository.DocumentRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -30,16 +32,22 @@ import java.util.Locale;
 public class DocumentService {
 
     private final DocumentRepository documentRepository;
+    private final DocumentChunkRepository chunkRepository;
     private final TextExtractionService textExtractionService;
+    private final DocumentIngestionService ingestionService;
     private final DocumentMapper documentMapper;
     private final long maxFileSizeBytes;
 
     public DocumentService(DocumentRepository documentRepository,
+                           DocumentChunkRepository chunkRepository,
                            TextExtractionService textExtractionService,
+                           DocumentIngestionService ingestionService,
                            DocumentMapper documentMapper,
                            @Value("${app.documents.max-file-size-bytes}") long maxFileSizeBytes) {
         this.documentRepository = documentRepository;
+        this.chunkRepository = chunkRepository;
         this.textExtractionService = textExtractionService;
+        this.ingestionService = ingestionService;
         this.documentMapper = documentMapper;
         this.maxFileSizeBytes = maxFileSizeBytes;
     }
@@ -76,9 +84,14 @@ public class DocumentService {
         document.setFileType(type);
         document.setFileSize(file.getSize());
         document.setPageCount(result.pageCount());
-        // Extraction succeeded; embedding/chunking completes in a later phase.
+        // Extraction succeeded; chunking + embedding + storage completes below.
         document.setStatus(DocumentStatus.PROCESSING);
         document = documentRepository.save(document);
+
+        // Turn the extracted text into searchable, embedded chunks. On failure
+        // the ingestion service marks the document FAILED rather than leaving it
+        // stuck in PROCESSING.
+        ingestionService.ingest(document, result.sections());
 
         return documentMapper.toDto(document);
     }
@@ -95,6 +108,18 @@ public class DocumentService {
         return documentRepository.findByIdAndUserId(id, userId)
                 .map(documentMapper::toDto)
                 .orElseThrow(() -> new ResourceNotFoundException("Document not found"));
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentPreviewDto preview(Long userId, Long id) {
+        Document document = documentRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found"));
+        List<DocumentPreviewDto.Chunk> chunks = chunkRepository
+                .findByDocumentIdOrderByChunkIndexAsc(document.getId()).stream()
+                .map(c -> new DocumentPreviewDto.Chunk(c.getChunkIndex(), c.getPageNumber(), c.getContent()))
+                .toList();
+        return new DocumentPreviewDto(document.getId(), document.getFilename(),
+                document.getStatus().name(), chunks);
     }
 
     @Transactional

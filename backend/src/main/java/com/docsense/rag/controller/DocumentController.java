@@ -1,6 +1,7 @@
 package com.docsense.rag.controller;
 
 import com.docsense.rag.dto.DocumentDto;
+import com.docsense.rag.dto.DocumentPreviewDto;
 import com.docsense.rag.security.UserPrincipal;
 import com.docsense.rag.service.DocumentService;
 import org.springframework.http.HttpStatus;
@@ -44,6 +45,11 @@ public class DocumentController {
     @GetMapping("/{id}")
     public DocumentDto get(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         return documentService.get(principal.getUserId(), id);
+    }
+
+    @GetMapping("/{id}/preview")
+    public DocumentPreviewDto preview(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        return documentService.preview(principal.getUserId(), id);
     }
 
     @DeleteMapping("/{id}")
