@@ -1,0 +1,60 @@
+# Render deployment blueprint for DocSense.
+#
+# This provisions three resources: a PostgreSQL database (with pgvector enabled
+# by the app's Flyway migration), the Spring Boot backend (built from the root
+# Dockerfile), and the React SPA served as a static site.
+#
+# NOTE: Secrets (Google OAuth + Gemini) and the exact *-online URLs are wired in
+# at deploy time per the project's secrets policy — they are intentionally NOT
+# stored here. `sync: false` marks an env var that must be filled in the Render
+# dashboard. Replace the two <...>.onrender.com placeholders with the real
+# hostnames Render assigns, then set matching Google OAuth redirect URIs.
+
+databases:
+  - name: docsense-db
+    databaseName: doc_qa
+    plan: free
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: docsense-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      # Full JDBC URL for the Render Postgres instance (with sslmode=require).
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USERNAME
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      # Public URL of the static frontend (used for CORS + post-login redirect).
+      - key: FRONTEND_URL
+        value: https://docsense-frontend.onrender.com
+      - key: ALLOWED_ORIGINS
+        value: https://docsense-frontend.onrender.com
+      - key: EMBEDDING_DIMENSION
+        value: "768"
+      # Credentials required by the final phase (see README §Secrets).
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+  - type: web
+    name: docsense-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      # Tell the SPA where the backend lives (split-origin deployment).
+      - key: VITE_API_BASE_URL
+        value: https://docsense-backend.onrender.com/api
+      - key: VITE_BACKEND_URL
+        value: https://docsense-backend.onrender.com
